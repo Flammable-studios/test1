@@ -1,0 +1,156 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #f7f5f0;
+  color: #1f2421;
+  font-family: "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: #ff5a1f;
+  color: #fff;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input,
+textarea,
+select {
+  font-family: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid #ff5a1f;
+  outline-offset: 2px;
+}
+
+input:focus,
+textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255, 90, 31, 0.18);
+}
+
+@keyframes jt-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.jt-spin {
+  animation: jt-spin 1s linear infinite;
+}
+
+.jt-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.jt-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(20, 20, 18, 0.1);
+}
+
+.jt-chip,
+.jt-tab-btn {
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.jt-fab {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.jt-fab:hover {
+  transform: scale(1.06);
+}
+
+.jt-claim-btn {
+  transition: background 0.15s ease;
+}
+
+/* Modal */
+@keyframes jt-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes jt-pop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.jt-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 20, 18, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 50;
+  animation: jt-fade 0.18s ease;
+}
+.jt-modal {
+  background: #fff;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 85vh;
+  overflow-y: auto;
+  position: relative;
+  padding: 20px 24px 24px;
+  animation: jt-pop 0.2s ease;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Settings: force-reduced motion */
+html.force-reduce *,
+html.force-reduce *::before,
+html.force-reduce *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+/* Job grid: single column on phones, two columns on desktop */
+.jt-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+@media (min-width: 760px) {
+  .jt-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+}
