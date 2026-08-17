@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Check, CheckCircle2, Clock, MapPin } from "lucide-react";
+import { Check, CheckCircle2, Clock, MapPin, Sparkles } from "lucide-react";
 import { catInfo, jobLabel, type Job } from "../data";
 import { formatPrice, timeAgo } from "../time";
 import { styles } from "../styles";
@@ -32,7 +32,14 @@ export const JobCard = memo(function JobCard({
           </div>
           <span style={{ ...styles.cardCat, color: info.color }}>{jobLabel(job)}</span>
         </div>
-        <span style={styles.price}>${formatPrice(job.price)}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {job.promoted && (
+            <span style={styles.promotedTag}>
+              <Sparkles size={11} /> Promoted
+            </span>
+          )}
+          <span style={styles.price}>${formatPrice(job.price)}</span>
+        </div>
       </div>
       <h3 style={styles.cardTitle}>{job.title}</h3>
       {job.note ? <p style={styles.cardNote}>{job.note}</p> : null}

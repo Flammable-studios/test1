@@ -14,12 +14,14 @@ import { SettingsModal } from "./components/SettingsModal";
 import { PostForm } from "./components/PostForm";
 import { Toast } from "./components/Toast";
 import { AdBanner, AdCard } from "./components/AdSlot";
+import { CheckoutModal } from "./components/CheckoutModal";
 
 type Tab = "find" | "post" | "mine" | "posted";
 type ModalState =
   | { type: "job"; jobId: string }
   | { type: "auth" }
   | { type: "settings" }
+  | { type: "checkout"; jobId: string }
   | null;
 
 export default function App() {
@@ -194,6 +196,7 @@ export default function App() {
     const note = String(data.get("note") ?? "").trim();
     const customLabel =
       category === "other" ? String(data.get("customLabel") ?? "").trim() : "";
+    const promote = data.get("promote") === "on";
     if (!title || !Number.isFinite(price) || price < 1 || !location) return;
 
     const job: Job = {
@@ -211,10 +214,27 @@ export default function App() {
     void persist([job, ...(jobs ?? [])]);
     e.currentTarget.reset();
     setTab("find");
-    await award(user, XP_POST, (levelUpMsg) => {
-      flash(levelUpMsg ?? "Job posted — +10 XP.");
-    });
+    if (promote) {
+      setModal({ type: "checkout", jobId: job.id });
+      void award(user, XP_POST, () => {});
+    } else {
+      await award(user, XP_POST, (levelUpMsg) => {
+        flash(levelUpMsg ?? "Job posted — +10 XP.");
+      });
+    }
   };
+
+  const handlePaid = useCallback(
+    (id: string) => {
+      if (!jobs) return;
+      void persist(
+        jobs.map((j) => (j.id === id ? { ...j, promoted: true, promotedAt: Date.now() } : j)),
+      );
+      setModal(null);
+      flash("Promotion active — your post is now boosted.");
+    },
+    [jobs, persist, flash],
+  );
 
   const handleSettingsChange = useCallback((next: Settings) => {
     setSettings(next);
@@ -256,7 +276,10 @@ export default function App() {
     () =>
       (jobs ?? [])
         .slice()
-        .sort((a, b) => b.posted - a.posted)
+        .sort(
+          (a, b) =>
+            Number(b.promoted ?? false) - Number(a.promoted ?? false) || b.posted - a.posted,
+        )
         .filter((j) => filter === "all" || j.category === filter),
     [jobs, filter],
   );
@@ -283,6 +306,14 @@ export default function App() {
 
   const modalJob = useMemo(
     () => (modal?.type === "job" ? (jobs ?? []).find((j) => j.id === modal.jobId) ?? null : null),
+    [modal, jobs],
+  );
+
+  const checkoutJob = useMemo(
+    () =>
+      modal?.type === "checkout"
+        ? (jobs ?? []).find((j) => j.id === modal.jobId) ?? null
+        : null,
     [modal, jobs],
   );
 
@@ -562,7 +593,16 @@ export default function App() {
           onClose={() => setModal(null)}
           onClaim={requestClaim}
           onComplete={requestComplete}
+          onPromote={(id) => setModal({ type: "checkout", jobId: id })}
           onRequireAuth={() => setModal({ type: "auth" })}
+        />
+      ) : null}
+
+      {checkoutJob ? (
+        <CheckoutModal
+          job={checkoutJob}
+          onClose={() => setModal(null)}
+          onPaid={() => handlePaid(checkoutJob.id)}
         />
       ) : null}
 

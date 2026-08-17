@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { Loader2, Plus } from "lucide-react";
-import { CATEGORIES, type CategoryId } from "../data";
+import { CATEGORIES, PROMO_DAYS, PROMO_PRICE_USD, type CategoryId } from "../data";
 import { styles } from "../styles";
 
 export function PostForm({
@@ -120,6 +120,16 @@ export function PostForm({
         style={{ ...styles.input, minHeight: 80, resize: "vertical" }}
         placeholder="Anything a tasker should know — access, timing, size of the job"
       />
+
+      <label style={styles.promoRow}>
+        <input type="checkbox" name="promote" style={styles.promoCheck} />
+        <span>
+          <span style={styles.promoLabel}>Promote this post</span>
+          <span style={styles.promoDesc}>
+            ${PROMO_PRICE_USD}.00 · Pinned to the top with a Promoted badge for {PROMO_DAYS} days
+          </span>
+        </span>
+      </label>
 
       <div style={styles.formActions}>
         <button type="button" style={styles.cancelBtn} onClick={onCancel} disabled={saving}>

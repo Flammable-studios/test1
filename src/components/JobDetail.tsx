@@ -1,5 +1,5 @@
-import { Check, CheckCircle2, Clock, MapPin } from "lucide-react";
-import { catInfo, jobLabel, type Job } from "../data";
+import { Check, CheckCircle2, Clock, MapPin, Sparkles } from "lucide-react";
+import { catInfo, jobLabel, PROMO_DAYS, PROMO_PRICE_USD, type Job } from "../data";
 import { formatPrice, timeAgo } from "../time";
 import { styles } from "../styles";
 import { Modal } from "./Modal";
@@ -12,6 +12,7 @@ export function JobDetail({
   onClose,
   onClaim,
   onComplete,
+  onPromote,
   onRequireAuth,
 }: {
   job: Job;
@@ -21,6 +22,7 @@ export function JobDetail({
   onClose: () => void;
   onClaim: (id: string) => void;
   onComplete: (id: string) => void;
+  onPromote: (id: string) => void;
   onRequireAuth: () => void;
 }) {
   const info = catInfo(job.category);
@@ -34,6 +36,11 @@ export function JobDetail({
         <span style={{ ...styles.detailChip, color: info.color, borderColor: info.color }}>
           {jobLabel(job)}
         </span>
+        {job.promoted && (
+          <span style={styles.promotedTag}>
+            <Sparkles size={11} /> Promoted
+          </span>
+        )}
         {job.status !== "open" && (
           <span
             style={job.status === "complete" ? styles.completeTag : styles.claimedTag}
@@ -90,6 +97,16 @@ export function JobDetail({
           </span>
         )}
       </div>
+      {isOwner && job.status === "open" && !job.promoted && (
+        <div style={styles.detailPromo}>
+          <button type="button" style={styles.promoBtn} onClick={() => onPromote(job.id)}>
+            <Sparkles size={15} /> Boost this post — ${PROMO_PRICE_USD}.00
+          </button>
+          <p style={styles.promoHint}>
+            Pinned to the top with a Promoted badge for {PROMO_DAYS} days.
+          </p>
+        </div>
+      )}
     </Modal>
   );
 }

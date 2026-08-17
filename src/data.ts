@@ -48,6 +48,9 @@ export interface Job {
   /** User id of the person who posted the job. */
   postedBy?: string;
   completedAt?: number;
+  /** True once the poster has paid to promote this listing. */
+  promoted?: boolean;
+  promotedAt?: number;
 }
 
 export const CATEGORIES: Category[] = [
@@ -65,6 +68,9 @@ export const CATEGORIES: Category[] = [
 export function catInfo(id: CategoryId): Category {
   return CATEGORIES.find((c) => c.id === id) ?? CATEGORIES[0];
 }
+
+export const PROMO_PRICE_USD = 5;
+export const PROMO_DAYS = 7;
 
 /** Display label for a job — uses the custom type for "Other" jobs. */
 export function jobLabel(job: Job): string {
