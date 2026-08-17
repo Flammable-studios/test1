@@ -51,6 +51,10 @@ export interface Job {
   /** True once the poster has paid to promote this listing. */
   promoted?: boolean;
   promotedAt?: number;
+  /** Email of the poster, captured at post time for claim notifications. */
+  posterEmail?: string;
+  /** Whether the poster opted in to email notifications for this job. */
+  notifyEmail?: boolean;
 }
 
 export const CATEGORIES: Category[] = [

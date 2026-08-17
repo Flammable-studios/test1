@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Loader2, LogIn, Plus } from "lucide-react";
 import { CATEGORIES, SEED, type CategoryId, type Job } from "./data";
@@ -15,6 +15,8 @@ import { PostForm } from "./components/PostForm";
 import { Toast } from "./components/Toast";
 import { AdBanner, AdCard } from "./components/AdSlot";
 import { CheckoutModal } from "./components/CheckoutModal";
+import { readPromoRedirect } from "./stripe";
+import { notifyClaimed } from "./email";
 
 type Tab = "find" | "post" | "mine" | "posted";
 type ModalState =
@@ -35,6 +37,7 @@ export default function App() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [modal, setModal] = useState<ModalState>(null);
   const [pendingClaim, setPendingClaim] = useState<string | null>(null);
+  const handledRedirect = useRef(false);
 
   useEffect(() => {
     let alive = true;
@@ -73,6 +76,30 @@ export default function App() {
     }
   }, []);
 
+  // Handle returning from a Stripe checkout (Payment Link success URL).
+  useEffect(() => {
+    if (jobs === null || handledRedirect.current) return;
+    const { jobId, status } = readPromoRedirect();
+    if (!status) return;
+    handledRedirect.current = true;
+    if (status === "succeeded" && jobId) {
+      const target = jobs.find((j) => j.id === jobId);
+      if (target && !target.promoted) {
+        void persist(
+          jobs.map((j) =>
+            j.id === jobId ? { ...j, promoted: true, promotedAt: Date.now() } : j,
+          ),
+        );
+        flash("Payment confirmed — your post is now promoted!");
+      }
+    } else if (status === "canceled") {
+      flash("Checkout canceled — your job wasn't charged.");
+    } else {
+      flash("Payment didn't go through — please try again.");
+    }
+    window.history.replaceState({}, "", window.location.pathname);
+  }, [jobs, persist, flash]);
+
   /** Award XP and surface level-ups through the toast. */
   const award = useCallback(
     async (u: AuthUser, amount: number, onAwarded: (msg: string | null) => void) => {
@@ -106,6 +133,7 @@ export default function App() {
             : j,
         ),
       );
+      void notifyClaimed(target);
       flash("Claimed — message the poster to confirm timing.");
       setModal((m) => (m?.type === "job" ? null : m));
     },
@@ -209,6 +237,8 @@ export default function App() {
       status: "open",
       posted: Date.now(),
       postedBy: user.id,
+      posterEmail: user.email,
+      notifyEmail: settings.notifyOnClaim,
       ...(customLabel ? { customLabel } : {}),
     };
     void persist([job, ...(jobs ?? [])]);
@@ -601,6 +631,7 @@ export default function App() {
       {checkoutJob ? (
         <CheckoutModal
           job={checkoutJob}
+          email={user?.email}
           onClose={() => setModal(null)}
           onPaid={() => handlePaid(checkoutJob.id)}
         />

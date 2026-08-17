@@ -2,25 +2,36 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 import { PROMO_DAYS, PROMO_PRICE_USD, type Job } from "../data";
+import { startPromoCheckout, stripeConfigured } from "../stripe";
 import { styles } from "../styles";
 import { Modal } from "./Modal";
 
 export function CheckoutModal({
   job,
+  email,
   onClose,
   onPaid,
 }: {
   job: Job;
+  email?: string;
   onClose: () => void;
   onPaid: () => void;
 }) {
   const [busy, setBusy] = useState(false);
 
-  const pay = (e: FormEvent<HTMLFormElement>) => {
+  const payDemo = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (busy) return;
     setBusy(true);
     window.setTimeout(onPaid, 1400);
+  };
+
+  const payWithStripe = () => {
+    if (busy) return;
+    setBusy(true);
+    if (!startPromoCheckout(job.id, email)) {
+      setBusy(false);
+    }
   };
 
   return (
@@ -31,59 +42,76 @@ export function CheckoutModal({
           <Sparkles size={12} /> Top of the board with a Promoted badge for {PROMO_DAYS} days
         </p>
       </div>
-      <form onSubmit={pay}>
-        <label style={styles.label} htmlFor="co-card">
-          Card number
-        </label>
-        <input
-          id="co-card"
-          style={styles.input}
-          placeholder="4242 4242 4242 4242"
-          inputMode="numeric"
-          autoComplete="cc-number"
-          required
-        />
 
-        <div style={styles.twoCol}>
-          <div style={{ flex: 1 }}>
-            <label style={styles.label} htmlFor="co-exp">
-              Expiry
-            </label>
-            <input
-              id="co-exp"
-              style={styles.input}
-              placeholder="MM / YY"
-              inputMode="numeric"
-              autoComplete="cc-exp"
-              required
-            />
+      {stripeConfigured ? (
+        <>
+          <div style={styles.checkoutTotal}>
+            <span>Total</span>
+            <strong>${PROMO_PRICE_USD}.00</strong>
           </div>
-          <div style={{ flex: 1 }}>
-            <label style={styles.label} htmlFor="co-cvc">
-              CVC
-            </label>
-            <input
-              id="co-cvc"
-              style={styles.input}
-              placeholder="123"
-              inputMode="numeric"
-              autoComplete="cc-csc"
-              required
-            />
+          <button type="button" style={styles.primaryBtn} onClick={payWithStripe} disabled={busy}>
+            {busy ? <Loader2 size={16} className="jt-spin" /> : <Sparkles size={16} />}
+            {busy ? "Redirecting to Stripe…" : `Pay $${PROMO_PRICE_USD}.00 with Stripe`}
+          </button>
+          <p style={styles.hint}>
+            You'll be redirected to Stripe's secure checkout to complete your payment.
+          </p>
+        </>
+      ) : (
+        <form onSubmit={payDemo}>
+          <label style={styles.label} htmlFor="co-card">
+            Card number
+          </label>
+          <input
+            id="co-card"
+            style={styles.input}
+            placeholder="4242 4242 4242 4242"
+            inputMode="numeric"
+            autoComplete="cc-number"
+            required
+          />
+          <div style={styles.twoCol}>
+            <div style={{ flex: 1 }}>
+              <label style={styles.label} htmlFor="co-exp">
+                Expiry
+              </label>
+              <input
+                id="co-exp"
+                style={styles.input}
+                placeholder="MM / YY"
+                inputMode="numeric"
+                autoComplete="cc-exp"
+                required
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={styles.label} htmlFor="co-cvc">
+                CVC
+              </label>
+              <input
+                id="co-cvc"
+                style={styles.input}
+                placeholder="123"
+                inputMode="numeric"
+                autoComplete="cc-csc"
+                required
+              />
+            </div>
           </div>
-        </div>
-
-        <div style={styles.checkoutTotal}>
-          <span>Total</span>
-          <strong>${PROMO_PRICE_USD}.00</strong>
-        </div>
-
-        <button type="submit" style={styles.primaryBtn} disabled={busy}>
-          {busy ? <Loader2 size={16} className="jt-spin" /> : <Sparkles size={16} />}
-          {busy ? "Processing…" : `Pay $${PROMO_PRICE_USD}.00`}
-        </button>
-        <p style={styles.hint}>Demo checkout — no real charge. Connect Stripe to accept real payments.</p>
-      </form>
+          <div style={styles.checkoutTotal}>
+            <span>Total</span>
+            <strong>${PROMO_PRICE_USD}.00</strong>
+          </div>
+          <button type="submit" style={styles.primaryBtn} disabled={busy}>
+            {busy ? <Loader2 size={16} className="jt-spin" /> : <Sparkles size={16} />}
+            {busy ? "Processing…" : `Pay $${PROMO_PRICE_USD}.00 (demo)`}
+          </button>
+          <p style={styles.hint}>
+            Demo checkout — no real charge. Add <strong>VITE_STRIPE_PAYMENT_LINK</strong> in the
+            Keys tab to accept real payments.
+          </p>
+        </form>
+      )}
     </Modal>
   );
 }

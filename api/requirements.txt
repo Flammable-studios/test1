@@ -1,0 +1,2 @@
+# send_email.py uses only the Python standard library (urllib),
+# so there are no third-party dependencies to install.

@@ -1,3 +1,4 @@
+import { getSupabase } from "./supabase";
 import { kvGet, kvSet } from "./storage";
 
 export interface AuthUser {
@@ -13,6 +14,10 @@ export interface AuthResult {
   error?: string;
   user?: AuthUser;
 }
+
+/* ------------------------------------------------------------------ */
+/* Local-demo fallback (used when Supabase is not configured)          */
+/* ------------------------------------------------------------------ */
 
 interface StoredUser {
   id: string;
@@ -121,6 +126,62 @@ async function startSession(userId: string): Promise<void> {
   await kvSet(SESSION_KEY, JSON.stringify(session));
 }
 
+/* ------------------------------------------------------------------ */
+/* Supabase helpers                                                    */
+/* ------------------------------------------------------------------ */
+
+interface ProfileRow {
+  id: string;
+  email: string;
+  name: string;
+  xp: number;
+}
+
+async function fetchProfile(userId: string): Promise<AuthUser | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, email, name, xp")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error || !data) return null;
+  const p = data as ProfileRow;
+  return {
+    id: p.id,
+    email: p.email,
+    name: p.name || p.email.split("@")[0],
+    createdAt: Date.now(),
+    xp: p.xp ?? 0,
+  };
+}
+
+async function ensureProfile(userId: string, email: string, name?: string): Promise<AuthUser> {
+  const existing = await fetchProfile(userId);
+  if (existing) return existing;
+  const supabase = getSupabase();
+  if (supabase) {
+    await supabase.from("profiles").upsert(
+      { id: userId, email, name: name?.trim() || email.split("@")[0], xp: 0 },
+      { onConflict: "id" },
+    );
+  }
+  const profile = await fetchProfile(userId);
+  return (
+    profile ?? {
+      id: userId,
+      email,
+      name: name?.trim() || email.split("@")[0],
+      createdAt: Date.now(),
+      xp: 0,
+    }
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Public API                                                          */
+/* ------------------------------------------------------------------ */
+
 export async function signUp(input: {
   email: string;
   password: string;
@@ -130,6 +191,14 @@ export async function signUp(input: {
   const password = input.password;
   if (!EMAIL_RE.test(email)) return { ok: false, error: "Enter a valid email address." };
   if (password.length < 6) return { ok: false, error: "Password must be at least 6 characters." };
+
+  const supabase = getSupabase();
+  if (supabase) {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error || !data.user) return { ok: false, error: error?.message ?? "Sign up failed." };
+    const user = await ensureProfile(data.user.id, data.user.email ?? email, input.name);
+    return { ok: true, user };
+  }
 
   const users = await loadUsers();
   if (users.some((u) => u.email === email)) {
@@ -153,6 +222,15 @@ export async function signUp(input: {
 
 export async function signIn(emailIn: string, password: string): Promise<AuthResult> {
   const email = emailIn.trim().toLowerCase();
+
+  const supabase = getSupabase();
+  if (supabase) {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error || !data.user) return { ok: false, error: error?.message ?? "Sign in failed." };
+    const user = await ensureProfile(data.user.id, data.user.email ?? email);
+    return { ok: true, user };
+  }
+
   const users = await loadUsers();
   const user = users.find((u) => u.email === email);
   if (!user) return { ok: false, error: "No account found for this email." };
@@ -165,6 +243,14 @@ export async function signIn(emailIn: string, password: string): Promise<AuthRes
 }
 
 export async function restoreSession(): Promise<AuthUser | null> {
+  const supabase = getSupabase();
+  if (supabase) {
+    const { data } = await supabase.auth.getSession();
+    const u = data.session?.user;
+    if (!u) return null;
+    return ensureProfile(u.id, u.email ?? "");
+  }
+
   const raw = await kvGet(SESSION_KEY);
   if (!raw) return null;
   try {
@@ -179,10 +265,22 @@ export async function restoreSession(): Promise<AuthUser | null> {
 }
 
 export async function signOut(): Promise<void> {
+  const supabase = getSupabase();
+  if (supabase) {
+    await supabase.auth.signOut();
+    return;
+  }
   await kvSet(SESSION_KEY, "");
 }
 
 export async function awardXp(userId: string, amount: number): Promise<AuthUser | null> {
+  const supabase = getSupabase();
+  if (supabase) {
+    const { error } = await supabase.rpc("increment_xp", { target: userId, amount });
+    if (error) return null;
+    return fetchProfile(userId);
+  }
+
   const users = await loadUsers();
   const idx = users.findIndex((u) => u.id === userId);
   if (idx === -1) return null;
@@ -192,6 +290,11 @@ export async function awardXp(userId: string, amount: number): Promise<AuthUser 
 }
 
 export async function getUserById(userId: string): Promise<AuthUser | null> {
+  const supabase = getSupabase();
+  if (supabase) {
+    return fetchProfile(userId);
+  }
+
   const users = await loadUsers();
   const u = users.find((x) => x.id === userId);
   return u ? toPublic(u) : null;
