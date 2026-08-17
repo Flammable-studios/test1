@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Check, CheckCircle2, Clock, MapPin, Sparkles } from "lucide-react";
 import { catInfo, jobLabel, PROMO_DAYS, PROMO_PRICE_USD, type Job } from "../data";
 import { formatPrice, timeAgo } from "../time";
@@ -12,6 +13,7 @@ export function JobDetail({
   onClose,
   onClaim,
   onComplete,
+  onDelete,
   onPromote,
   onRequireAuth,
 }: {
@@ -22,9 +24,11 @@ export function JobDetail({
   onClose: () => void;
   onClaim: (id: string) => void;
   onComplete: (id: string) => void;
+  onDelete: (id: string) => void;
   onPromote: (id: string) => void;
   onRequireAuth: () => void;
 }) {
+  const [confirmingClose, setConfirmingClose] = useState(false);
   const info = catInfo(job.category);
   const Icon = info.icon;
   return (
@@ -105,6 +109,37 @@ export function JobDetail({
           <p style={styles.promoHint}>
             Pinned to the top with a Promoted badge for {PROMO_DAYS} days.
           </p>
+        </div>
+      )}
+      {isOwner && (
+        <div style={styles.detailClose}>
+          {confirmingClose ? (
+            <div style={styles.detailCloseConfirmRow}>
+              <span style={styles.detailClosePrompt}>Remove this listing?</span>
+              <button
+                type="button"
+                style={styles.detailCloseConfirmBtn}
+                onClick={() => onDelete(job.id)}
+              >
+                Yes, close it
+              </button>
+              <button
+                type="button"
+                style={styles.detailCloseCancelBtn}
+                onClick={() => setConfirmingClose(false)}
+              >
+                Keep it
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              style={styles.detailCloseBtn}
+              onClick={() => setConfirmingClose(true)}
+            >
+              Close this job
+            </button>
+          )}
         </div>
       )}
     </Modal>

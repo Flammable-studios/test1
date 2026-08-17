@@ -3,15 +3,19 @@ import { loadStripe } from "@stripe/stripe-js";
 /**
  * Stripe integration for JobTag.
  *
- * This app is static and client-only, so we use Stripe Checkout via
- * Payment Links: the buyer is redirected to a Stripe-hosted checkout
- * page and comes back through the Payment Link's success URL, where
- * Stripe appends `?redirect_status=succeeded`. The job that was paid
- * for is tracked in localStorage while the buyer is away.
+ * Real payments go through a server-side Checkout Session created by the
+ * `api/create_checkout_session.py` serverless function (which holds the
+ * secret STRIPE_SECRET_KEY). The buyer is redirected to Stripe's hosted
+ * checkout and comes back through the session's success URL, where the
+ * job is marked promoted. If the serverless function isn't reachable
+ * (e.g. local preview), we fall back to a Payment Link if one is set,
+ * and finally to the in-app demo checkout.
  *
- * Required in the Keys tab:
- *   VITE_STRIPE_PAYMENT_LINK      - the Payment Link URL for the $5 promo
- *   VITE_STRIPE_PUBLISHABLE_KEY   - publishable key (pk_...), used to init Stripe.js
+ * Keys:
+ *   STRIPE_SECRET_KEY          - server-side secret (sk_...), used by the serverless function
+ *   STRIPE_PRICE_ID            - optional Price ID; default is a $5 one-off charge
+ *   VITE_STRIPE_PAYMENT_LINK   - optional fallback Payment Link URL for the $5 promo
+ *   VITE_STRIPE_PUBLISHABLE_KEY - optional publishable key (pk_...), used to init Stripe.js
  */
 
 export const STRIPE_PUBLISHABLE_KEY = import.meta.env
@@ -35,40 +39,82 @@ export function getStripe(): ReturnType<typeof loadStripe> | null {
 }
 
 /**
- * Starts the promotion checkout. Remembers the job id locally, then
- * redirects to the Stripe Payment Link. Returns false if not configured.
+ * Starts the promotion checkout. Tries the server-side Checkout Session
+ * first (works once deployed with STRIPE_SECRET_KEY), then falls back
+ * to the Payment Link, then returns false so the app can show the demo
+ * checkout. Returns true once a redirect has been started.
  */
-export function startPromoCheckout(jobId: string, email?: string): boolean {
-  if (!STRIPE_PAYMENT_LINK) return false;
+export async function startPromoCheckout(
+  jobId: string,
+  email?: string,
+): Promise<boolean> {
+  // 1) Real server-side Checkout Session (deployed env with STRIPE_SECRET_KEY).
   try {
-    localStorage.setItem(PROMO_PENDING_KEY, jobId);
+    const res = await fetch("/api/create_checkout_session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jobId, email, origin: window.location.origin }),
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { url?: string };
+      if (data.url) {
+        window.location.assign(data.url);
+        return true;
+      }
+    }
   } catch {
-    /* ignore storage failures */
+    // No API server (e.g. local preview) — fall through to the Payment Link.
   }
-  const url = new URL(STRIPE_PAYMENT_LINK);
-  url.searchParams.set("client_reference_id", jobId);
-  if (email) url.searchParams.set("prefilled_email", email);
-  window.location.assign(url.toString());
-  return true;
+
+  // 2) Payment Link fallback.
+  if (STRIPE_PAYMENT_LINK) {
+    try {
+      localStorage.setItem(PROMO_PENDING_KEY, jobId);
+    } catch {
+      /* ignore storage failures */
+    }
+    const url = new URL(STRIPE_PAYMENT_LINK);
+    url.searchParams.set("client_reference_id", jobId);
+    if (email) url.searchParams.set("prefilled_email", email);
+    window.location.assign(url.toString());
+    return true;
+  }
+
+  return false;
 }
 
 /**
- * Reads the result of a Stripe checkout return. Only consumes state when
- * Stripe actually redirected back (i.e. `redirect_status` is present).
+ * Reads the result of a Stripe checkout return. Handles both flows:
+ * - Checkout Session success URL: `?job=...&session_id=...` (server path)
+ * - Payment Link return: `?redirect_status=succeeded|canceled|failed`
+ * - Checkout Session cancel URL: `?canceled=1`
  */
 export function readPromoRedirect(): {
   jobId: string | null;
   status: "succeeded" | "canceled" | "failed" | null;
 } {
-  const status = new URLSearchParams(window.location.search).get("redirect_status") as
+  const params = new URLSearchParams(window.location.search);
+  const redirectStatus = params.get("redirect_status") as
     | "succeeded"
     | "canceled"
     | "failed"
     | null;
+  const hasSession = Boolean(params.get("session_id"));
+  const canceled = params.get("canceled") === "1";
+
+  const status =
+    redirectStatus === "succeeded" || hasSession
+      ? "succeeded"
+      : redirectStatus === "canceled" || canceled
+        ? "canceled"
+        : redirectStatus === "failed"
+          ? "failed"
+          : null;
   if (!status) return { jobId: null, status: null };
-  let jobId: string | null = null;
+
+  let jobId: string | null = params.get("job");
   try {
-    jobId = localStorage.getItem(PROMO_PENDING_KEY);
+    jobId = jobId ?? localStorage.getItem(PROMO_PENDING_KEY);
     localStorage.removeItem(PROMO_PENDING_KEY);
   } catch {
     /* ignore storage failures */

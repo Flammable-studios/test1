@@ -24,7 +24,11 @@ export const JobCard = memo(function JobCard({
   const info = catInfo(job.category);
   const Icon = info.icon;
   return (
-    <article className="jt-card" style={styles.card} onClick={() => onOpen(job.id)}>
+    <article
+      className="jt-card"
+      style={{ ...styles.card, ...(job.promoted ? styles.cardPromoted : {}) }}
+      onClick={() => onOpen(job.id)}
+    >
       <div style={styles.cardTop}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ ...styles.iconWrap, background: info.color }}>

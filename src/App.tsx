@@ -195,6 +195,19 @@ export default function App() {
     [user, doComplete],
   );
 
+  /** Remove the poster's own listing from the board. */
+  const doClose = useCallback(
+    (id: string) => {
+      if (!user || !jobs) return;
+      const target = jobs.find((j) => j.id === id);
+      if (!target || target.postedBy !== user.id) return;
+      void persist(jobs.filter((j) => j.id !== id));
+      setModal(null);
+      flash("Job closed and removed from the board.");
+    },
+    [user, jobs, persist, flash],
+  );
+
   const openJob = useCallback((id: string) => setModal({ type: "job", jobId: id }), []);
 
   const handleAuthed = useCallback(
@@ -623,6 +636,7 @@ export default function App() {
           onClose={() => setModal(null)}
           onClaim={requestClaim}
           onComplete={requestComplete}
+          onDelete={doClose}
           onPromote={(id) => setModal({ type: "checkout", jobId: id })}
           onRequireAuth={() => setModal({ type: "auth" })}
         />

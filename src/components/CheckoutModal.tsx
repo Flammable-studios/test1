@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 import { PROMO_DAYS, PROMO_PRICE_USD, type Job } from "../data";
-import { startPromoCheckout, stripeConfigured } from "../stripe";
+import { startPromoCheckout } from "../stripe";
 import { styles } from "../styles";
 import { Modal } from "./Modal";
 
@@ -18,6 +18,8 @@ export function CheckoutModal({
   onPaid: () => void;
 }) {
   const [busy, setBusy] = useState(false);
+  /** True once real Stripe checkout was attempted but unavailable — show the demo form. */
+  const [demo, setDemo] = useState(false);
 
   const payDemo = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -26,11 +28,14 @@ export function CheckoutModal({
     window.setTimeout(onPaid, 1400);
   };
 
-  const payWithStripe = () => {
+  const payWithStripe = async () => {
     if (busy) return;
     setBusy(true);
-    if (!startPromoCheckout(job.id, email)) {
+    const started = await startPromoCheckout(job.id, email);
+    if (!started) {
+      // No serverless function (preview) and no Payment Link — fall back to demo.
       setBusy(false);
+      setDemo(true);
     }
   };
 
@@ -43,15 +48,15 @@ export function CheckoutModal({
         </p>
       </div>
 
-      {stripeConfigured ? (
+      {!demo ? (
         <>
           <div style={styles.checkoutTotal}>
             <span>Total</span>
             <strong>${PROMO_PRICE_USD}.00</strong>
           </div>
-          <button type="button" style={styles.primaryBtn} onClick={payWithStripe} disabled={busy}>
+          <button type="button" style={styles.primaryBtn} onClick={() => void payWithStripe()} disabled={busy}>
             {busy ? <Loader2 size={16} className="jt-spin" /> : <Sparkles size={16} />}
-            {busy ? "Redirecting to Stripe…" : `Pay $${PROMO_PRICE_USD}.00 with Stripe`}
+            {busy ? "Starting secure checkout…" : `Pay $${PROMO_PRICE_USD}.00 with Stripe`}
           </button>
           <p style={styles.hint}>
             You'll be redirected to Stripe's secure checkout to complete your payment.
@@ -107,8 +112,8 @@ export function CheckoutModal({
             {busy ? "Processing…" : `Pay $${PROMO_PRICE_USD}.00 (demo)`}
           </button>
           <p style={styles.hint}>
-            Demo checkout — no real charge. Add <strong>VITE_STRIPE_PAYMENT_LINK</strong> in the
-            Keys tab to accept real payments.
+            Demo checkout — no real charge. Add <strong>STRIPE_SECRET_KEY</strong> (deploy) or{" "}
+            <strong>VITE_STRIPE_PAYMENT_LINK</strong> in the Keys tab to accept real payments.
           </p>
         </form>
       )}
